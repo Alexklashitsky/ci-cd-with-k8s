@@ -1,0 +1,124 @@
+
+trigger:
+- main
+- feature
+
+resources:
+- repo: self
+
+variables:
+  group: secrtets
+  imageRepo: trackerImage
+  tag: '$(Build.BuildId)'
+############################################################building the image###############################################################@@@@@@@@@
+stages:
+- stage: Build
+  displayName: Build image
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        containerRegistry: 'ACR2'
+        repository: '$(imageRepo)'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+        tags: |
+          $(tag)
+          latest
+    - task: PublishPipelineArtifact@1
+      inputs:
+       targetPath: '$(Pipeline.Workspace)/s/manifest'
+       artifact: 'manifest'
+       publishLocation: 'pipeline'
+#############################################################Deploy to STG########################################################################################
+- stage: Deploy_to_STG
+  condition: succeeded()
+  displayName: Deploy to dev
+  dependsOn: build
+  variables:
+  - group: secrtets
+  jobs:
+  - deployment: stg
+    displayName: deploy to STG
+    environment: 'k8s.stg'
+    pool:
+      vmImage: ubuntu-latest
+    strategy:
+     runOnce:
+      deploy:  
+        steps:
+    #-----------------downlod the manifat-----------------------------------------
+        - task: DownloadPipelineArtifact@2
+          inputs:
+            buildType: 'current'
+            artifactName: 'manifest'
+            targetPath: '$(Pipeline.Workspace)/manifest'
+#-------------------------createing the secrets-----------------------------------------
+        - task: KubernetesManifest@0
+          displayName: Create Secret
+          inputs:
+              action: 'createSecret'
+              secretType: 'generic'
+              secretName: 'trackersecretstg'
+              secretArguments: '--from-literal=COOKIE_ENCRYPT_PWD=$(COOKIE_ENCRYPT_PWD) --from-literal=HOST=$(HOST) --from-literal=PORT=$(PORT) --from-literal=NODE_ENV=$(NODE_ENV) --from-literal=HOST_URL=$(HOST_URL) --from-literal=OKTA_CLIENT_ID=$(OKTA_CLIENT_ID) --from-literal=OKTA_CLIENT_SECRET=$(OKTA_CLIENT_SECRET) --from-literal=OKTA_ORG_URL=$(OKTA_ORG_URL) --from-literal=PGHOST=$(PGHOST) --from-literal=PGUSERNAME=$(PGUSERNAME) --from-literal=PGDATABASE=$(PGDATABASE) --from-literal=PGPASSWORD=$(PGPASSWORD) --from-literal=PGPORT=$(PGPORT)'
+
+        - task: KubernetesManifest@0
+          inputs:
+            action: 'deploy'
+            namespace: 'stg'
+            manifests: |
+              $(Pipeline.Workspace)/manifest/deploymentSTG.yml
+              $(Pipeline.Workspace)/manifest/ingressSTG.yml
+
+#############################Deploy to pord########################################################################################################################################              
+
+- stage: Deploy_to_Prod
+  condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/main'))
+  displayName: Deployto prod
+  dependsOn: Deploy_to_STG
+  variables:
+  - group: secrtets.prod
+  jobs:
+  - deployment: deploy
+    displayName: deploy to prod
+    environment: 'k8s-prod.prod'
+    pool:
+      vmImage: ubuntu-latest
+    strategy:
+     runOnce:
+      deploy:  
+        steps:
+#-----------------downlod the manifat-----------------------------------------
+        - task: DownloadPipelineArtifact@2
+          inputs:
+            buildType: 'current'
+            artifactName: 'manifest'
+            targetPath: '$(Pipeline.Workspace)/manifest'
+#-------------------------createing the secrets-----------------------------------------
+        - task: KubernetesManifest@0
+          displayName: Create Secret
+          inputs:
+              action: 'createSecret'
+              secretType: 'generic'
+              secretName: 'trackersecret'
+              secretArguments: '--from-literal=COOKIE_ENCRYPT_PWD=$(COOKIE_ENCRYPT_PWD) --from-literal=HOST=$(HOST) --from-literal=PORT=$(PORT) --from-literal=NODE_ENV=$(NODE_ENV) --from-literal=HOST_URL=$(HOST_URL) --from-literal=OKTA_CLIENT_ID=$(OKTA_CLIENT_ID) --from-literal=OKTA_CLIENT_SECRET=$(OKTA_CLIENT_SECRET) --from-literal=OKTA_ORG_URL=$(OKTA_ORG_URL) --from-literal=PGHOST=$(PGHOST) --from-literal=PGUSERNAME=$(PGUSERNAME) --from-literal=PGDATABASE=$(PGDATABASE) --from-literal=PGPASSWORD=$(PGPASSWORD) --from-literal=PGPORT=$(PGPORT)'
+
+        - task: KubernetesManifest@0
+          inputs:
+            action: 'deploy'
+            namespace: 'prod'
+            manifests: |
+              $(Pipeline.Workspace)/manifest/deployment.yml
+              $(Pipeline.Workspace)/manifest/ingress.yml
+
+
+    
+
+      
+
+      
