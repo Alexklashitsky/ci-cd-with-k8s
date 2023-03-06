@@ -20,3 +20,10 @@ jobs:
           password: ${{ secrets.ACR_PASSWORD }}
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+      # Build and push the Docker image
+    - name: Build and push Docker image
+      uses: azure/docker@v1
+      with:
+          context: .
+          dockerfile: Dockerfile
+          image: alextestacr.azurecr.io/test/22
