@@ -11,10 +11,7 @@ jobs:
     steps:
       # Checkout the code
       - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          repository: "https://github.com/Alexklashitsky/Activity-Result.git"
-      
+        uses: actions/checkout@v2      
       # Login to the Azure Container Registry
       - name: Login to ACR
         uses: azure/docker-login@v1
