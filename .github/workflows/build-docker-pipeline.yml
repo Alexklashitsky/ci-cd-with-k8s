@@ -1,0 +1,33 @@
+name: Build and push to ACR
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the code
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          repository: "https://github.com/Alexklashitsky/Activity-Result.git"
+      
+      # Login to the Azure Container Registry
+      - name: Login to ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: alextestacr.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      # Build and push the Docker image
+      - name: Build and push Docker image
+        uses: azure/docker@v1
+        with:
+          context: .
+          dockerfile: Dockerfile
+          image: <ACR_LOGIN_SERVER_NAME>/<IMAGE_NAME>:<TAG>
+
